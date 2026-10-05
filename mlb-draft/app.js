@@ -61,11 +61,11 @@ function slotUrgency(team,type){return SLOT_DEFS.filter(s=>s.type===type&&!team.
 function missingTypes(team){const m={};SLOT_DEFS.forEach(s=>{if(!team.roster[s.key])m[s.type]=(m[s.type]||0)+1});return m}
 function picksRemainingForTeam(team){return ROUNDS-team.picks.length}
 function chooseSlot(team,p){const opts=compatibleSlots(team,p);if(!opts.length)return null;const nonDH=opts.filter(s=>s.type!=='DH');if(nonDH.length)return nonDH.sort((a,b)=>slotUrgency(team,b.type)-slotUrgency(team,a.type))[0];return opts[0]}
-function draftPlayer(teamIndex,player,slotOverride=null){
+function draftPlayer(teamIndex,player,slotOverride=null,silent=false){
  if(!state.available.has(player.id))return false;const team=state.teams[teamIndex],slot=slotOverride||chooseSlot(team,player);if(!slot)return false;
  team.roster[slot.key]=player;team.picks.push({player,slot:slot.key});state.available.delete(player.id);
  state.history.unshift({overall:overallPick(),round:roundNumber(),teamIndex,team:team.abbr,player,slot:slot.label});state.pickIndex++;
- if(state.pickIndex>=TOTAL_PICKS){finishDraft();return true}renderAll();return true;
+ if(state.pickIndex>=TOTAL_PICKS){finishDraft();return true}if(!silent)renderAll();return true;
 }
 function playerAdjustedIndex(p){return p.kind==='H'?(p.hitting?.OPSplus||100):(p.pitching?.ERAplus||100)}
 function honorScore(p){const h=p.honors||{};return(h.mvp||0)*5+(h.cy||0)*5+(h.gg||0)*1.2+(h.allstar||0)*.7+(h.hof?8:0)}
@@ -79,18 +79,18 @@ function aiPick(teamIndex){
   if(bestSlot.type==='CL'&&roundNumber()<8)score-=2;if(bestSlot.type==='RP'&&roundNumber()<6)score-=1.5;score+=scarcityBonus(bestSlot.type,p.ovr);
   if(p.positions.length>1)score+=.8;if(p.twoWay)score+=.4;if(score>bestScore){bestScore=score;best={p,slot:bestSlot}}
  }
- if(best)draftPlayer(teamIndex,best.p,best.slot);
+ if(best)draftPlayer(teamIndex,best.p,best.slot,true);
 }
-function scarcityBonus(type,ovr){let count=0,elite=0;for(const p of allPlayers){if(!state.available.has(p.id))continue;if(p.positions.includes(type)||(type==='DH'&&p.kind==='H')){count++;if(p.ovr>=ovr-3)elite++}}if(!count)return 0;return Math.max(0,Math.min(5,8/Math.sqrt(elite+1)))}
+function scarcityBonus(type,ovr){const base={C:2.2,SS:2.0,CL:1.8,SP:1.2,RP:.7,OF:.6,'2B':1.0,'3B':.9,'1B':.5,DH:.2}[type]||0;return base+(ovr>=95?.7:ovr>=90?.35:0)}
 function processAiTurns(){if(!state||state.complete)return;while(currentTeamIndex()!==state.userTeamIndex&&!state.complete)aiPick(currentTeamIndex());renderAll()}
 function autoUntilUser(){
  if(!state||state.complete)return;$('autoToUserBtn').disabled=true;
- if(currentTeamIndex()===state.userTeamIndex){const best=bestAutoForUser(state.teams[state.userTeamIndex]);if(best)draftPlayer(state.userTeamIndex,best.p,best.slot)}
+ if(currentTeamIndex()===state.userTeamIndex){const best=bestAutoForUser(state.teams[state.userTeamIndex]);if(best)draftPlayer(state.userTeamIndex,best.p,best.slot,true)}
  while(!state.complete&&currentTeamIndex()!==state.userTeamIndex)aiPick(currentTeamIndex());
  $('autoToUserBtn').disabled=state.complete;renderAll();
 }
 function bestAutoForUser(team){let best=null,bestScore=-Infinity;for(const p of allPlayers){if(!state.available.has(p.id))continue;const slot=chooseSlot(team,p);if(!slot)continue;const score=p.ovr+(missingTypes(team)[slot.type]?8:0)+scarcityBonus(slot.type,p.ovr)+(playerAdjustedIndex(p)-100)*.02;if(score>bestScore){bestScore=score;best={p,slot}}}return best}
-function userDraft(id){if(currentTeamIndex()!==state.userTeamIndex||state.complete)return;const p=allPlayers.find(x=>x.id===id);if(!p)return;const team=state.teams[state.userTeamIndex],slot=chooseSlot(team,p);if(!slot){alert('현재 남은 로스터 슬롯에는 이 선수를 배치할 수 없습니다.');return}draftPlayer(state.userTeamIndex,p,slot);processAiTurns()}
+function userDraft(id){if(currentTeamIndex()!==state.userTeamIndex||state.complete)return;const p=allPlayers.find(x=>x.id===id);if(!p)return;const team=state.teams[state.userTeamIndex],slot=chooseSlot(team,p);if(!slot){alert('현재 남은 로스터 슬롯에는 이 선수를 배치할 수 없습니다.');return}draftPlayer(state.userTeamIndex,p,slot,true);processAiTurns()}
 window.userDraft=userDraft;
 function renderAll(){if(!state)return;renderStatus();renderPlayers();renderRoster();renderHistory()}
 function renderStatus(){
