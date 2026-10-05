@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="MLB 역대 선수 통산 성적과 시대보정 지표를 기반으로 하는 30구단 스네이크 드래프트 게임" />
+  <title>MLB All-Time Draft</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div><div class="eyebrow">1871–2025 · ERA ADJUSTED</div><h1>MLB ALL-TIME DRAFT</h1></div>
+      <div class="top-actions"><button id="newDraftBtn" class="ghost">새 드래프트</button><button id="autoToUserBtn" class="ghost" disabled>내 픽까지 자동 진행</button></div>
+    </header>
+    <main>
+      <section id="setupView" class="panel setup-panel">
+        <div class="setup-copy"><div class="eyebrow">SELECT YOUR FRANCHISE</div><h2>내 구단을 선택하세요</h2><p class="muted">드래프트 시작 시 30개 구단의 1라운드 순번이 매번 무작위로 추첨됩니다.</p></div>
+        <div id="teamGrid" class="team-grid"></div>
+        <div class="setup-footer"><div id="dataStatus" class="data-status">선수 데이터를 불러오는 중...</div><button id="startBtn" class="primary" disabled>랜덤 순번 추첨 & 드래프트 시작</button></div>
+      </section>
+      <section id="draftView" class="hidden">
+        <section class="panel draft-order-panel"><div class="section-head compact"><div><div class="eyebrow">ROUND 1 LOTTERY</div><h2>드래프트 지명 순서</h2></div><span id="myPickBadge" class="lottery-badge">내 순번 -</span></div><div id="draftOrder" class="draft-order"></div></section>
+        <div class="draft-status panel"><div><div class="eyebrow">CURRENT PICK</div><div id="currentPickLabel" class="big-status">Round 1 · Pick 1</div></div><div class="turn-box logo-turn"><img id="currentTeamLogo" class="status-logo" alt="" /><div><span>지명 구단</span><strong id="currentTeamLabel">-</strong></div></div><div class="turn-box"><span>내 다음 픽까지</span><strong id="untilUserPick">-</strong></div><div class="turn-box"><span>남은 선수</span><strong id="remainingPlayers">-</strong></div></div>
+        <div class="draft-grid">
+          <section class="panel players-panel"><div class="section-head"><div><h2>선수 카드 보드</h2><p class="muted">OVR = 시대보정 OPS+/ERA+ 스타일 지표 + 통산 생산성 + 수상 경력 가중치.</p></div><div class="filters"><input id="searchInput" placeholder="선수 검색" /><select id="posFilter"><option value="ALL">전체 포지션</option><option value="SP">SP</option><option value="RP">RP</option><option value="CL">CL</option><option value="C">C</option><option value="1B">1B</option><option value="2B">2B</option><option value="SS">SS</option><option value="3B">3B</option><option value="OF">OF</option><option value="DH">DH</option></select><select id="sortMode"><option value="ovr">OVR순</option><option value="adjusted">OPS+/ERA+순</option><option value="awards">수상경력순</option><option value="name">이름순</option><option value="career">커리어 길이순</option></select></div></div><div id="playerCards" class="player-cards"></div></section>
+          <aside class="side-stack"><section class="panel roster-panel"><div class="section-head compact"><div class="team-heading"><img id="myTeamLogo" class="mini-logo" alt="" /><div><h2>내 로스터</h2><span id="myTeamName" class="team-pill">-</span></div></div></div><div id="rosterSlots" class="roster-slots"></div><div class="roster-summary"><span>팀 평균 OVR</span><strong id="teamAvgOvr">-</strong></div></section><section class="panel history-panel"><div class="section-head compact"><h2>최근 지명</h2></div><div id="draftHistory" class="history-list"></div></section></aside>
+        </div>
+      </section>
+      <section id="resultView" class="panel hidden result-panel"><div class="eyebrow">DRAFT COMPLETE</div><h2>21라운드 · 630픽 완료</h2><div id="resultSummary"></div><button id="restartBtn" class="primary">다시 하기</button></section>
+    </main>
+    <footer class="footer">Stats: SABR Lahman Baseball Database (1871–2025). OPS+/ERA+ 표시는 게임용 시대보정 지표로 공식 Baseball-Reference 수치와 다를 수 있습니다.</footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
