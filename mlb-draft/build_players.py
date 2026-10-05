@@ -8,7 +8,21 @@ def pct(s): return s.rank(pct=True,method='max')
 def rate(d):
  a=d.AB; h=d.H; obpd=a+d.BB+d.HBP+d.SF; tb=h-d['2B']-d['3B']-d.HR+2*d['2B']+3*d['3B']+4*d.HR
  return h/a.replace(0,float('nan')), (h+d.BB+d.HBP)/obpd.replace(0,float('nan')), tb/a.replace(0,float('nan'))
-pe=csv('People.csv'); ba=csv('Batting.csv'); pi=csv('Pitching.csv'); ap=csv('Appearances.csv'); aw=csv('AwardsPlayers.csv'); al=csv('AllstarFull.csv'); hf=csv('HallOfFame.csv')
+pe=csv('People.csv'); ba=csv('Batting.csv'); pi=csv('Pitching.csv'); ap=csv('Appearances.csv'); fi=csv('Fielding.csv'); aw=csv('AwardsPlayers.csv'); al=csv('AllstarFull.csv'); hf=csv('HallOfFame.csv')
+# Chadwick Register crosswalk: Lahman/B-Ref id -> MLBAM id for official MLB headshots.
+regs=[]
+for x in '0123456789abcdef':
+ try: regs.append(pd.read_csv(f'https://raw.githubusercontent.com/chadwickbureau/register/master/data/people-{x}.csv',low_memory=False))
+ except Exception as e: print('register shard skipped',x,e)
+reg=pd.concat(regs,ignore_index=True) if regs else pd.DataFrame()
+mlbam={}
+if not reg.empty and 'key_bbref' in reg and 'key_mlbam' in reg:
+ rr=reg[['key_bbref','key_mlbam']].dropna()
+ for _,r in rr.iterrows():
+  try:
+   k=str(r.key_bbref).strip(); v=int(float(r.key_mlbam))
+   if k and v>0: mlbam[k]=v
+  except: pass
 for d in (ba,pi): d['lgID']=d.lgID.replace(0,'MLB')
 bc=['G','AB','R','H','2B','3B','HR','RBI','SB','BB','HBP','SH','SF']; bs=ba.groupby(['playerID','yearID','lgID'],as_index=False)[bc].sum(); lg=bs.groupby(['yearID','lgID'],as_index=False)[bc].sum()
 av,o,s=rate(bs); _,lo,ls=rate(lg); bs['PA']=bs.AB+bs.BB+bs.HBP+bs.SF+bs.SH; refs=bs[['yearID','lgID']].merge(lg.assign(lOBP=lo,lSLG=ls),on=['yearID','lgID']); bs['OPSplus']=100*((o/refs.lOBP)+(s/refs.lSLG)-1); bs.OPSplus=bs.OPSplus.clip(20,300).fillna(100)
@@ -18,6 +32,28 @@ bat=ba.groupby('playerID')[bc].sum(); avg,obp,slg=rate(bat); bat['AVG']=avg;bat[
 pit=pi.groupby('playerID')[pc].sum();pit['IP']=pit.IPouts/3;pit=pit[pit.IP>=100];pit['ERA']=9*pit.ER/pit.IP;pit['WHIP']=(pit.BB+pit.H)/pit.IP;pit['K9']=9*pit.SO/pit.IP;pit['BB9']=9*pit.BB/pit.IP;pit=pit.join(padj[['ERAplus']]).fillna({'ERAplus':100})
 hs=.40*pct(bat.OPSplus)+.08*pct(bat.OPS)+.06*pct(bat.AVG)+.12*pct(bat.HR)+.08*pct(bat.H)+.07*pct(bat.RBI)+.05*pct(bat.R)+.05*pct(bat.BB)+.03*pct(bat.SB)+.06*pct(bat.G)
 pscore=.38*pct(pit.ERAplus)+.10*(1-pct(pit.ERA))+.12*(1-pct(pit.WHIP))+.10*pct(pit.K9)+.04*(1-pct(pit.BB9))+.10*pct(pit.SO)+.08*pct(pit.IP)+.04*pct(pit.W)+.04*pct(pit.SV)
+# 20-99 game attributes. They are percentile ratings derived from career performance, not official scouting grades.
+bat['BBRate']=bat.BB/bat.PA.replace(0,float('nan')); bat['SBRate']=bat.SB/bat.PA.replace(0,float('nan'))
+hskill=pd.DataFrame(index=bat.index)
+hskill['contact']=.72*pct(bat.AVG)+.28*pct(bat.H)
+hskill['power']=.58*pct(bat.HR)+.42*pct(bat.OPS)
+hskill['discipline']=.58*pct(bat.BBRate.fillna(0))+.42*pct((bat.OPS-bat.AVG).fillna(0))
+hskill['speed']=.58*pct(bat.SBRate.fillna(0))+.42*pct(bat.SB)
+pit['IPG']=pit.IP/pit.G.replace(0,float('nan')); pit['GSRate']=pit.GS/pit.G.replace(0,float('nan'))
+pskill=pd.DataFrame(index=pit.index)
+pskill['stuff']=.62*pct(pit.K9)+.38*pct(pit.SO)
+pskill['control']=.58*(1-pct(pit.BB9))+.42*(1-pct(pit.WHIP))
+pskill['stamina']=.58*pct(pit.IPG.fillna(0))+.42*pct(pit.GSRate.fillna(0))
+pskill['clutch']=.65*pct(pit.ERAplus)+.35*pct(pit.SV)
+# Position-adjusted fielding proxy: fielding percentage + experience within each position.
+ff=fi.copy()
+for col in ['G','PO','A','E']:
+ if col not in ff: ff[col]=0
+fg=ff.groupby(['playerID','POS'],as_index=False)[['G','PO','A','E']].sum(); fg['TC']=fg.PO+fg.A+fg.E; fg['FPCT']=(fg.PO+fg.A)/fg.TC.replace(0,float('nan'))
+fg=fg[(fg.G>=100)&fg.FPCT.notna()]
+fg['fpPctRank']=fg.groupby('POS').FPCT.rank(pct=True,method='max'); fg['gRank']=fg.groupby('POS').G.rank(pct=True,method='max'); fg['defScore']=.72*fg.fpPctRank+.28*fg.gRank
+defscore=fg.groupby('playerID').defScore.max().to_dict()
+def grade(v): return max(20,min(99,round(20+79*float(v))))
 H={}
 def hon(pid): return H.setdefault(pid,{'mvp':0,'cy':0,'gg':0,'allstar':0,'hof':False})
 for _,r in aw.iterrows():
@@ -47,6 +83,11 @@ for pid in set(hs.index)|set(pscore.index):
  if ptr:
   p=pit.loc[pid];pv={'G':int(p.G),'W':int(p.W),'ERA':round(p.ERA,2),'WHIP':round(p.WHIP,2),'SO':int(p.SO),'SV':int(p.SV),'IP':round(p.IP,1),'ERAplus':round(p.ERAplus,1)}
  y=yrs.loc[pid] if pid in yrs.index else {'min':0,'max':0}; games=int((bat.loc[pid].G if kind=='H' else pit.loc[pid].G))
- out.append({'id':pid,'name':names.get(pid,pid),'kind':kind,'twoWay':htr and ptr,'positions':list(dict.fromkeys(pos)),'ovr':ovr,'careerGames':games,'firstYear':int(y['min']),'lastYear':int(y['max']),'hitting':hv,'pitching':pv,'honors':hh,'awardBonus':round(bonus(pid,kind),1)})
+ skills={}
+ if htr:
+  skills.update({'CON':grade(hskill.loc[pid,'contact']),'POW':grade(hskill.loc[pid,'power']),'DISC':grade(hskill.loc[pid,'discipline']),'SPD':grade(hskill.loc[pid,'speed']),'DEF':grade(defscore.get(pid,.45)+min(.18,hh['gg']*.025))})
+ if ptr:
+  skills.update({'STF':grade(pskill.loc[pid,'stuff']),'CTL':grade(pskill.loc[pid,'control']),'STA':grade(pskill.loc[pid,'stamina']),'CLU':grade(pskill.loc[pid,'clutch'])})
+ out.append({'id':pid,'mlbam':mlbam.get(pid),'name':names.get(pid,pid),'kind':kind,'twoWay':htr and ptr,'positions':list(dict.fromkeys(pos)),'ovr':ovr,'careerGames':games,'firstYear':int(y['min']),'lastYear':int(y['max']),'hitting':hv,'pitching':pv,'skills':skills,'honors':hh,'awardBonus':round(bonus(pid,kind),1)})
 out.sort(key=lambda x:(-x['ovr'],-x['careerGames'],x['name'])); O.write_text(json.dumps(out,ensure_ascii=False,separators=(',',':')),encoding='utf8');print('wrote',len(out),'players')
 if len(out)<600: raise SystemExit('not enough players')
