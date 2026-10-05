@@ -1,23 +1,24 @@
-name: Deploy MLB All-Time Draft
+name: Build MLB All-Time Draft Data
 on:
   push:
     branches: [main]
     paths:
-      - 'mlb-draft/**'
+      - 'mlb-draft/index.html'
+      - 'mlb-draft/app.js'
+      - 'mlb-draft/styles.css'
+      - 'mlb-draft/build_players.py'
       - '.github/workflows/deploy-mlb-draft.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: mlb-draft-data
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-data:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,19 +31,12 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check pandas
           python mlb-draft/build_players.py
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-      - name: Upload site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Commit generated player data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mlb-draft/data/players.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Build MLB player data [skip ci]"
+            git push
+          fi
